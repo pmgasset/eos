@@ -593,23 +593,7 @@ const EOSPlatform = () => {
     <nav className="eos-nav">
       <div className="nav-brand">
         <h1>🎯 EOS Platform</h1>
-        <div className={`api-status ${apiStatus}      `}
-      </style>
-
-      {renderNavigation()}
-      
-      <div className="main-content">
-        {renderContent()}
-      </div>
-
-      {renderModal()}
-      {renderGhlConfigModal()}
-      {renderNotifications()}
-    </div>
-  );
-};
-
-export default EOSPlatform;>
+        <div className={`api-status ${apiStatus}`}>
           <span>{apiStatus === 'connected' ? '🟢' : apiStatus === 'error' ? '🔴' : '🟡'}</span>
           <span>{apiStatus}</span>
         </div>
@@ -2569,3 +2553,236 @@ export default EOSPlatform;>
           font-size: 0.8rem;
           color: #666;
           margin-top: 0.25rem;
+        }
+
+        .checkbox-label {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          margin-bottom: 0.5rem;
+          font-size: 0.9rem;
+          cursor: pointer;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+          width: auto;
+          margin: 0;
+        }
+
+        .gwc-checkboxes {
+          background: #f9f9f9;
+          padding: 1rem;
+          border-radius: 6px;
+        }
+
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0,0,0,0.5);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+        }
+
+        .modal {
+          background: white;
+          border-radius: 8px;
+          width: 90%;
+          max-width: 500px;
+          max-height: 90vh;
+          overflow-y: auto;
+        }
+
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1.5rem;
+          border-bottom: 1px solid #e0e0e0;
+        }
+
+        .modal-header h3 {
+          margin: 0;
+        }
+
+        .modal-close {
+          background: none;
+          border: none;
+          font-size: 1.5rem;
+          cursor: pointer;
+          color: #666;
+        }
+
+        .modal-form {
+          padding: 1.5rem;
+        }
+
+        .form-group {
+          margin-bottom: 1rem;
+        }
+
+        .form-group label {
+          display: block;
+          margin-bottom: 0.5rem;
+          font-weight: 500;
+          color: #333;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+          width: 100%;
+          padding: 0.75rem;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          font-size: 1rem;
+          box-sizing: border-box;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+          outline: none;
+          border-color: #1976d2;
+          box-shadow: 0 0 0 2px rgba(25,118,210,0.2);
+        }
+
+        .form-group input.error,
+        .form-group select.error {
+          border-color: #f44336;
+        }
+
+        .form-group small {
+          display: block;
+          color: #666;
+          font-size: 0.8rem;
+          margin-top: 0.25rem;
+        }
+
+        .form-group input.readonly {
+          background: #f5f5f5;
+          color: #666;
+        }
+
+        .error-text {
+          color: #f44336;
+          font-size: 0.8rem;
+          margin-top: 0.25rem;
+        }
+
+        .modal-actions {
+          display: flex;
+          gap: 1rem;
+          justify-content: flex-end;
+          margin-top: 1.5rem;
+          padding-top: 1rem;
+          border-top: 1px solid #e0e0e0;
+        }
+
+        .notifications {
+          position: fixed;
+          top: 1rem;
+          right: 1rem;
+          z-index: 1001;
+        }
+
+        .notification {
+          background: white;
+          padding: 1rem;
+          border-radius: 4px;
+          margin-bottom: 0.5rem;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+          border-left: 4px solid #1976d2;
+          min-width: 300px;
+          animation: slideIn 0.3s ease-out;
+        }
+
+        .notification.success {
+          border-left-color: #4caf50;
+        }
+
+        .notification.error {
+          border-left-color: #f44336;
+        }
+
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .eos-nav {
+            flex-direction: column;
+            gap: 1rem;
+          }
+
+          .nav-menu {
+            justify-content: center;
+          }
+
+          .main-content {
+            padding: 1rem;
+          }
+
+          .stats-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .rocks-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .integration-cards {
+            grid-template-columns: 1fr;
+          }
+
+          .people-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .vto-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .modal {
+            width: 95%;
+            margin: 1rem;
+          }
+
+          .notifications {
+            top: 0.5rem;
+            right: 0.5rem;
+            left: 0.5rem;
+          }
+
+          .notification {
+            min-width: auto;
+          }
+        }
+      `}
+      </style>
+
+      {renderNavigation()}
+      
+      <div className="main-content">
+        {renderContent()}
+      </div>
+
+      {renderModal()}
+      {renderGhlConfigModal()}
+      {renderNotifications()}
+    </div>
+  );
+};
+
+export default EOSPlatform;
