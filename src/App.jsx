@@ -1126,6 +1126,7 @@ const EOSPlatform = () => {
                     onChange={e => handleInputChange('name', e.target.value)}
                     onKeyPress={e => e.key === 'Enter' && handleSubmit()}
                     className={errors.name ? 'error' : ''}
+                    placeholder="e.g., Monthly Revenue, New Clients, etc."
                   />
                   {errors.name && <span className="error-text">{errors.name}</span>}
                 </div>
@@ -1138,8 +1139,32 @@ const EOSPlatform = () => {
                     onChange={e => handleInputChange('goal', e.target.value)}
                     onKeyPress={e => e.key === 'Enter' && handleSubmit()}
                     className={errors.goal ? 'error' : ''}
+                    placeholder="e.g., $50,000, 10 clients, 95%"
                   />
                   {errors.goal && <span className="error-text">{errors.goal}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label>Current Value</label>
+                  <input
+                    type="text"
+                    value={formData.current || ''}
+                    onChange={e => handleInputChange('current', e.target.value)}
+                    placeholder="Current actual value"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Status</label>
+                  <select
+                    value={formData.status || 'unknown'}
+                    onChange={e => handleInputChange('status', e.target.value)}
+                  >
+                    <option value="unknown">Unknown</option>
+                    <option value="on-track">On Track</option>
+                    <option value="behind">Behind</option>
+                    <option value="exceeded">Exceeded Goal</option>
+                  </select>
                 </div>
                 
                 <div className="form-group">
@@ -1758,6 +1783,7 @@ const EOSPlatform = () => {
 
         .status.on-track { background: #e8f5e8; color: #4caf50; }
         .status.behind { background: #fff3e0; color: #ff9800; }
+        .status.exceeded { background: #e8f5e8; color: #2e7d32; }
         .status.unknown { background: #f0f0f0; color: #666; }
 
         .rocks-grid {
