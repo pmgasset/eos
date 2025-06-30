@@ -30,8 +30,17 @@ const EOSPlatform = () => {
   const [formData, setFormData] = useState({});
   const [errors, setErrors] = useState({});
 
-  // Notification System
-  const [notifications, setNotifications] = useState([]);
+  // GHL Integration state
+  const [ghlConfig, setGhlConfig] = useState({
+    apiKey: '',
+    locationId: '',
+    webhookUrl: '',
+    syncContacts: true,
+    syncOpportunities: true,
+    lastSync: null,
+    isConnected: false
+  });
+  const [showGhlConfig, setShowGhlConfig] = useState(false);
 
   // API Configuration for your specific Cloudflare setup
   const API_BASE = 'https://eos-platform-api.traveldata.workers.dev/api/v1';
@@ -86,6 +95,70 @@ const EOSPlatform = () => {
       }
     } catch (error) {
       showNotification('Failed to sync with GoHighLevel', 'error');
+    }
+  };
+
+  // GHL Configuration Functions
+  const loadGhlConfig = async () => {
+    try {
+      const response = await apiCall('/ghl/config');
+      if (response.success && response.data) {
+        setGhlConfig(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to load GHL config:', error);
+    }
+  };
+
+  const saveGhlConfig = async (config) => {
+    try {
+      const response = await apiCall('/ghl/config', 'PUT', config);
+      if (response.success) {
+        setGhlConfig(config);
+        setShowGhlConfig(false);
+        showNotification('GoHighLevel configuration saved successfully!', 'success');
+        
+        // Test the connection
+        await testGhlConnection(config);
+      } else {
+        showNotification('Failed to save GHL configuration', 'error');
+      }
+    } catch (error) {
+      showNotification('Failed to save GHL configuration', 'error');
+    }
+  };
+
+  const testGhlConnection = async (config) => {
+    try {
+      const response = await apiCall('/ghl/test', 'POST', config);
+      if (response.success) {
+        setGhlConfig(prev => ({ ...prev, isConnected: true }));
+        showNotification('GHL connection test successful!', 'success');
+      } else {
+        setGhlConfig(prev => ({ ...prev, isConnected: false }));
+        showNotification('GHL connection test failed: ' + response.error, 'error');
+      }
+    } catch (error) {
+      setGhlConfig(prev => ({ ...prev, isConnected: false }));
+      showNotification('GHL connection test failed', 'error');
+    }
+  };
+
+  const syncAllData = async () => {
+    setIsLoading(true);
+    try {
+      const response = await apiCall('/ghl/sync-all', 'POST');
+      if (response.success) {
+        showNotification('Data sync completed successfully!', 'success');
+        // Reload data after sync
+        window.location.reload();
+      } else {
+        showNotification('Data sync failed: ' + response.error, 'error');
+      }
+    } catch (error) {
+      showNotification('Data sync failed', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -429,6 +502,9 @@ const EOSPlatform = () => {
             oneYearPlan: ''
           });
         }
+        
+        // Load GHL configuration
+        await loadGhlConfig();
         
         setApiStatus('connected');
       } catch (error) {
@@ -1061,13 +1137,20 @@ const EOSPlatform = () => {
           <h3>🚀 GoHighLevel CRM</h3>
           <p>Sync contacts, deals, and activities with your EOS data</p>
           <div className="integration-status">
-            <span className="status connected">Connected</span>
+            <span className={`status ${ghlConfig.isConnected ? 'connected' : 'disconnected'}`}>
+              {ghlConfig.isConnected ? 'Connected' : 'Not Connected'}
+            </span>
+          </div>
+          <div className="integration-details">
+            {ghlConfig.lastSync && (
+              <p className="last-sync">Last sync: {new Date(ghlConfig.lastSync).toLocaleDateString()}</p>
+            )}
           </div>
           <div className="integration-actions">
-            <button className="btn btn-primary" onClick={() => syncWithGHL('all', {})}>
-              Sync Now
+            <button className="btn btn-primary" onClick={syncAllData} disabled={!ghlConfig.isConnected || isLoading}>
+              {isLoading ? 'Syncing...' : 'Sync Now'}
             </button>
-            <button className="btn btn-secondary">
+            <button className="btn btn-secondary" onClick={() => setShowGhlConfig(true)}>
               Configure
             </button>
           </div>
@@ -1089,7 +1172,115 @@ const EOSPlatform = () => {
     </div>
   );
 
-  const renderModal = () => {
+  const renderGhlConfigModal = () => {
+    if (!showGhlConfig) return null;
+
+    const [tempConfig, setTempConfig] = useState({ ...ghlConfig });
+    
+    const handleConfigChange = (field, value) => {
+      setTempConfig(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleSaveConfig = () => {
+      // Auto-generate webhook URL
+      const webhookUrl = `${API_BASE.replace('/api/v1', '')}/api/ghl/webhook`;
+      const finalConfig = { ...tempConfig, webhookUrl };
+      saveGhlConfig(finalConfig);
+    };
+
+    return (
+      <div className="modal-overlay" onClick={() => setShowGhlConfig(false)}>
+        <div className="modal ghl-config-modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>🚀 GoHighLevel Configuration</h3>
+            <button className="modal-close" onClick={() => setShowGhlConfig(false)}>×</button>
+          </div>
+          
+          <div className="modal-form">
+            <div className="form-group">
+              <label>API Key *</label>
+              <input
+                type="password"
+                value={tempConfig.apiKey || ''}
+                onChange={e => handleConfigChange('apiKey', e.target.value)}
+                placeholder="Your GoHighLevel API Key"
+              />
+              <small>Find this in your GHL account under Settings → API</small>
+            </div>
+
+            <div className="form-group">
+              <label>Location ID *</label>
+              <input
+                type="text"
+                value={tempConfig.locationId || ''}
+                onChange={e => handleConfigChange('locationId', e.target.value)}
+                placeholder="Your GHL Location ID"
+              />
+              <small>Found in your GHL URL or Location Settings</small>
+            </div>
+
+            <div className="form-group">
+              <label>Webhook URL (Auto-generated)</label>
+              <input
+                type="text"
+                value={`${API_BASE.replace('/api/v1', '')}/api/ghl/webhook`}
+                readOnly
+                className="readonly"
+              />
+              <small>Copy this URL to your GHL webhook settings</small>
+            </div>
+
+            <div className="form-group">
+              <h4>Sync Settings</h4>
+              <div className="checkbox-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={tempConfig.syncContacts || false}
+                    onChange={e => handleConfigChange('syncContacts', e.target.checked)}
+                  />
+                  Sync Contacts → People
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={tempConfig.syncOpportunities || false}
+                    onChange={e => handleConfigChange('syncOpportunities', e.target.checked)}
+                  />
+                  Sync Opportunities → Rocks
+                </label>
+              </div>
+            </div>
+
+            <div className="ghl-setup-guide">
+              <h4>Setup Instructions:</h4>
+              <ol>
+                <li>Get your API key from GHL Settings → API</li>
+                <li>Find your Location ID in your GHL account</li>
+                <li>Copy the webhook URL above</li>
+                <li>Add webhook in GHL Settings → Integrations → Webhooks</li>
+                <li>Select events: Contact Created, Contact Updated, Opportunity Created, etc.</li>
+              </ol>
+            </div>
+            
+            <div className="modal-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowGhlConfig(false)}>
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                onClick={handleSaveConfig}
+                disabled={!tempConfig.apiKey || !tempConfig.locationId}
+              >
+                Save & Test Connection
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
     if (!showModal) return null;
 
     const handleSubmit = () => {
@@ -1894,9 +2085,74 @@ const EOSPlatform = () => {
           margin: 1rem 0;
         }
 
+        .integration-status .status.connected {
+          background: #e8f5e8;
+          color: #4caf50;
+        }
+
+        .integration-status .status.disconnected {
+          background: #ffebee;
+          color: #f44336;
+        }
+
+        .integration-details {
+          margin: 1rem 0;
+        }
+
+        .last-sync {
+          font-size: 0.9rem;
+          color: #666;
+          margin: 0;
+        }
+
         .integration-actions {
           display: flex;
           gap: 0.5rem;
+        }
+
+        .ghl-config-modal {
+          max-width: 600px;
+          max-height: 80vh;
+        }
+
+        .checkbox-group {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .ghl-setup-guide {
+          background: #f9f9f9;
+          padding: 1rem;
+          border-radius: 6px;
+          margin: 1rem 0;
+        }
+
+        .ghl-setup-guide h4 {
+          margin: 0 0 0.5rem 0;
+          color: #333;
+        }
+
+        .ghl-setup-guide ol {
+          margin: 0;
+          padding-left: 1.2rem;
+        }
+
+        .ghl-setup-guide li {
+          margin-bottom: 0.3rem;
+          font-size: 0.9rem;
+        }
+
+        .form-group small {
+          display: block;
+          color: #666;
+          font-size: 0.8rem;
+          margin-top: 0.25rem;
+        }
+
+        .form-group input.readonly {
+          background: #f5f5f5;
+          color: #666;
         }
 
         .meetings-list {
@@ -2393,6 +2649,7 @@ const EOSPlatform = () => {
       </div>
 
       {renderModal()}
+      {renderGhlConfigModal()}
       {renderNotifications()}
     </div>
   );
