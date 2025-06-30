@@ -211,6 +211,20 @@ const EOSPlatform = () => {
     }
   };
 
+  // Helper function to get correct API endpoint
+  const getApiEndpoint = (type) => {
+    const endpoints = {
+      'person': 'people',
+      'metric': 'metrics',
+      'rock': 'rocks',
+      'issue': 'issues',
+      'meeting': 'meetings',
+      'todo': 'todos',
+      'coreValue': 'vision'
+    };
+    return endpoints[type] || `${type}s`;
+  };
+
   // CRUD Operations
   const createItem = async (type, data) => {
     if (!validateForm(type, data)) return;
@@ -218,7 +232,7 @@ const EOSPlatform = () => {
     const backendData = convertToBackendFormat(type, data);
 
     try {
-      const response = await apiCall(`/${type}s`, 'POST', backendData);
+      const response = await apiCall(`/${getApiEndpoint(type)}`, 'POST', backendData);
       if (response.success) {
         const frontendData = convertFromBackendFormat(type, backendData);
         
@@ -268,7 +282,7 @@ const EOSPlatform = () => {
     const backendData = convertToBackendFormat(type, data);
     
     try {
-      const response = await apiCall(`/${type}s/${id}`, 'PUT', backendData);
+      const response = await apiCall(`/${getApiEndpoint(type)}/${id}`, 'PUT', backendData);
       if (response.success) {
         const frontendData = convertFromBackendFormat(type, { ...data, id });
         
@@ -305,7 +319,7 @@ const EOSPlatform = () => {
 
   const deleteItem = async (type, id) => {
     try {
-      const response = await apiCall(`/${type}s/${id}`, 'DELETE');
+      const response = await apiCall(`/${getApiEndpoint(type)}/${id}`, 'DELETE');
       if (response.success) {
         // Update local state
         switch (type) {
