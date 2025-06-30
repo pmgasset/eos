@@ -229,6 +229,33 @@ const EOSPlatform = () => {
   const createItem = async (type, data) => {
     if (!validateForm(type, data)) return;
     
+    // Handle Core Values differently (they're part of vision data)
+    if (type === 'coreValue') {
+      const newCoreValue = {
+        id: Date.now().toString(),
+        value: data.value,
+        description: data.description
+      };
+      
+      const updatedVisionData = {
+        ...visionData,
+        coreValues: [...visionData.coreValues, newCoreValue]
+      };
+      
+      try {
+        const response = await apiCall('/vision', 'PUT', updatedVisionData);
+        if (response.success) {
+          setVisionData(updatedVisionData);
+          setShowModal(false);
+          setFormData({});
+          showNotification('Core value added successfully!', 'success');
+        }
+      } catch (error) {
+        showNotification('Failed to add core value', 'error');
+      }
+      return;
+    }
+    
     const backendData = convertToBackendFormat(type, data);
 
     try {
@@ -258,12 +285,6 @@ const EOSPlatform = () => {
             break;
           case 'meeting':
             setMeetings(prev => [...prev, frontendData]);
-            break;
-          case 'coreValue':
-            setVisionData(prev => ({
-              ...prev,
-              coreValues: [...prev.coreValues, { id: frontendData.id, value: frontendData.value, description: frontendData.description }]
-            }));
             break;
         }
         
