@@ -33,17 +33,19 @@ const EOSPlatform = () => {
   // Notification System
   const [notifications, setNotifications] = useState([]);
 
-  // GHL Integration state
+  // GHL Integration state - FIXED: moved tempConfig to main component state
   const [ghlConfig, setGhlConfig] = useState({
     apiKey: '',
     locationId: '',
     webhookUrl: '',
     syncContacts: true,
     syncOpportunities: true,
+    eosTagRequired: true, // NEW: Only sync EOS tagged items
     lastSync: null,
     isConnected: false
   });
   const [showGhlConfig, setShowGhlConfig] = useState(false);
+  const [tempGhlConfig, setTempGhlConfig] = useState({}); // FIXED: moved to main state
 
   // API Configuration for your specific Cloudflare setup
   const API_BASE = 'https://eos-platform-api.traveldata.workers.dev/api/v1';
@@ -82,13 +84,20 @@ const EOSPlatform = () => {
     }
   };
 
-  // GoHighLevel Integration Functions
+  // FIXED: GoHighLevel Integration Functions with EOS filtering
   const syncWithGHL = async (type, data) => {
     try {
+      // Only sync if EOS tag requirement is met
+      if (ghlConfig.eosTagRequired && !data.tags?.includes('EOS')) {
+        console.log('Skipping sync - EOS tag not found');
+        return;
+      }
+
       const response = await fetch(`${GHL_WEBHOOK}/${type}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-EOS-Filter': 'true', // Signal to backend to filter for EOS items
         },
         body: JSON.stringify(data),
       });
@@ -101,12 +110,13 @@ const EOSPlatform = () => {
     }
   };
 
-  // GHL Configuration Functions
+  // GHL Configuration Functions - FIXED
   const loadGhlConfig = async () => {
     try {
       const response = await apiCall('/ghl/config');
       if (response.success && response.data) {
         setGhlConfig(response.data);
+        setTempGhlConfig(response.data); // Initialize temp config
       }
     } catch (error) {
       console.error('Failed to load GHL config:', error);
@@ -115,16 +125,23 @@ const EOSPlatform = () => {
 
   const saveGhlConfig = async (config) => {
     try {
-      const response = await apiCall('/ghl/config', 'PUT', config);
+      // Add EOS filtering configuration
+      const configWithEOSFilter = {
+        ...config,
+        eosTagRequired: true,
+        webhookUrl: `${API_BASE.replace('/api/v1', '')}/api/ghl/webhook`
+      };
+
+      const response = await apiCall('/ghl/config', 'PUT', configWithEOSFilter);
       if (response.success) {
-        setGhlConfig(config);
+        setGhlConfig(configWithEOSFilter);
         setShowGhlConfig(false);
         showNotification('GoHighLevel configuration saved successfully!', 'success');
         
         // Test the connection
-        await testGhlConnection(config);
+        await testGhlConnection(configWithEOSFilter);
       } else {
-        showNotification('Failed to save GHL configuration', 'error');
+        showNotification('Failed to save GHL configuration: ' + response.error, 'error');
       }
     } catch (error) {
       showNotification('Failed to save GHL configuration', 'error');
@@ -150,11 +167,14 @@ const EOSPlatform = () => {
   const syncAllData = async () => {
     setIsLoading(true);
     try {
-      const response = await apiCall('/ghl/sync-all', 'POST');
+      // Send EOS filter parameter
+      const response = await apiCall('/ghl/sync-all', 'POST', { 
+        eosOnly: ghlConfig.eosTagRequired 
+      });
       if (response.success) {
-        showNotification('Data sync completed successfully!', 'success');
+        showNotification(`Data sync completed! Synced ${response.syncCount || 0} EOS items.`, 'success');
         // Reload data after sync
-        window.location.reload();
+        loadInitialData();
       } else {
         showNotification('Data sync failed: ' + response.error, 'error');
       }
@@ -163,6 +183,20 @@ const EOSPlatform = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // FIXED: Proper GHL configuration modal handler
+  const openGhlConfig = () => {
+    setTempGhlConfig({ ...ghlConfig }); // Initialize with current config
+    setShowGhlConfig(true);
+  };
+
+  const handleGhlConfigChange = (field, value) => {
+    setTempGhlConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveGhlConfig = () => {
+    saveGhlConfig(tempGhlConfig);
   };
 
   const showNotification = (message, type = 'info') => {
@@ -449,76 +483,74 @@ const EOSPlatform = () => {
   };
 
   // Initialize data on component mount
-  useEffect(() => {
-    const loadInitialData = async () => {
-      setIsLoading(true);
-      try {
-        const [metricsRes, rocksRes, issuesRes, peopleRes, meetingsRes, todosRes, visionRes] = await Promise.all([
-          apiCall('/metrics'),
-          apiCall('/rocks'),
-          apiCall('/issues'),
-          apiCall('/people'),
-          apiCall('/meetings'),
-          apiCall('/todos'),
-          apiCall('/vision')
-        ]);
-        
-        if (metricsRes.success) {
-          const convertedMetrics = (metricsRes.data || []).map(item => convertFromBackendFormat('metric', item));
-          setMetrics(convertedMetrics);
-        }
-        
-        if (rocksRes.success) {
-          const convertedRocks = (rocksRes.data || []).map(item => convertFromBackendFormat('rock', item));
-          setRocks(convertedRocks);
-        }
-        
-        if (issuesRes.success) {
-          const convertedIssues = (issuesRes.data || []).map(item => convertFromBackendFormat('issue', item));
-          setIssues(convertedIssues);
-        }
-        
-        if (peopleRes.success) {
-          const convertedPeople = (peopleRes.data || []).map(item => convertFromBackendFormat('person', item));
-          setPeopleData(convertedPeople);
-          // Populate teamMembers from peopleData
-          setTeamMembers(convertedPeople.map(person => ({ id: person.id, name: person.name })));
-        }
-        
-        if (meetingsRes.success) {
-          const convertedMeetings = (meetingsRes.data || []).map(item => convertFromBackendFormat('meeting', item));
-          setMeetings(convertedMeetings);
-        }
-        
-        if (todosRes.success) {
-          const convertedTodos = (todosRes.data || []).map(item => convertFromBackendFormat('todo', item));
-          setTodos(convertedTodos);
-        }
-        
-        if (visionRes.success) {
-          setVisionData(visionRes.data || {
-            coreValues: [],
-            coreFocus: { purpose: '', niche: '' },
-            tenYearTarget: '',
-            marketingStrategy: '',
-            threeYearPicture: '',
-            oneYearPlan: ''
-          });
-        }
-        
-        // Load GHL configuration
-        await loadGhlConfig();
-        
-        setApiStatus('connected');
-      } catch (error) {
-        setApiStatus('error');
-        showNotification('Failed to load data', 'error');
-      } finally {
-        setIsLoading(false);
+  const loadInitialData = async () => {
+    setIsLoading(true);
+    try {
+      const [metricsRes, rocksRes, issuesRes, peopleRes, meetingsRes, todosRes, visionRes] = await Promise.all([
+        apiCall('/metrics'),
+        apiCall('/rocks'),
+        apiCall('/issues'),
+        apiCall('/people'),
+        apiCall('/meetings'),
+        apiCall('/todos'),
+        apiCall('/vision')
+      ]);
+      
+      if (metricsRes.success) {
+        const convertedMetrics = (metricsRes.data || []).map(item => convertFromBackendFormat('metric', item));
+        setMetrics(convertedMetrics);
       }
-    };
+      
+      if (rocksRes.success) {
+        const convertedRocks = (rocksRes.data || []).map(item => convertFromBackendFormat('rock', item));
+        setRocks(convertedRocks);
+      }
+      
+      if (issuesRes.success) {
+        const convertedIssues = (issuesRes.data || []).map(item => convertFromBackendFormat('issue', item));
+        setIssues(convertedIssues);
+      }
+      
+      if (peopleRes.success) {
+        const convertedPeople = (peopleRes.data || []).map(item => convertFromBackendFormat('person', item));
+        setPeopleData(convertedPeople);
+        // Populate teamMembers from peopleData
+        setTeamMembers(convertedPeople.map(person => ({ id: person.id, name: person.name })));
+      }
+      
+      if (meetingsRes.success) {
+        const convertedMeetings = (meetingsRes.data || []).map(item => convertFromBackendFormat('meeting', item));
+        setMeetings(convertedMeetings);
+      }
+      
+      if (todosRes.success) {
+        const convertedTodos = (todosRes.data || []).map(item => convertFromBackendFormat('todo', item));
+        setTodos(convertedTodos);
+      }
+      
+      if (visionRes.success) {
+        setVisionData(visionRes.data || {
+          coreValues: [],
+          coreFocus: { purpose: '', niche: '' },
+          tenYearTarget: '',
+          marketingStrategy: '',
+          threeYearPicture: '',
+          oneYearPlan: ''
+        });
+      }
+      
+      setApiStatus('connected');
+    } catch (error) {
+      setApiStatus('error');
+      showNotification('Failed to load data', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadInitialData();
+    loadGhlConfig(); // Load GHL config separately
   }, []);
 
   // Update teamMembers when peopleData changes
@@ -561,7 +593,23 @@ const EOSPlatform = () => {
     <nav className="eos-nav">
       <div className="nav-brand">
         <h1>🎯 EOS Platform</h1>
-        <div className={`api-status ${apiStatus}`}>
+        <div className={`api-status ${apiStatus}      `}
+      </style>
+
+      {renderNavigation()}
+      
+      <div className="main-content">
+        {renderContent()}
+      </div>
+
+      {renderModal()}
+      {renderGhlConfigModal()}
+      {renderNotifications()}
+    </div>
+  );
+};
+
+export default EOSPlatform;>
           <span>{apiStatus === 'connected' ? '🟢' : apiStatus === 'error' ? '🔴' : '🟡'}</span>
           <span>{apiStatus}</span>
         </div>
@@ -1131,6 +1179,7 @@ const EOSPlatform = () => {
     </div>
   );
 
+  // FIXED: Updated integrations section with better GHL status and sync info
   const renderIntegrations = () => (
     <div className="integrations">
       <h2>Integrations</h2>
@@ -1138,23 +1187,37 @@ const EOSPlatform = () => {
       <div className="integration-cards">
         <div className="integration-card">
           <h3>🚀 GoHighLevel CRM</h3>
-          <p>Sync contacts, deals, and activities with your EOS data</p>
+          <p>Sync contacts and opportunities marked with 'EOS' tag</p>
           <div className="integration-status">
             <span className={`status ${ghlConfig.isConnected ? 'connected' : 'disconnected'}`}>
-              {ghlConfig.isConnected ? 'Connected' : 'Not Connected'}
+              {ghlConfig.isConnected ? '✅ Connected' : '❌ Not Connected'}
             </span>
           </div>
           <div className="integration-details">
             {ghlConfig.lastSync && (
               <p className="last-sync">Last sync: {new Date(ghlConfig.lastSync).toLocaleDateString()}</p>
             )}
+            <div className="sync-settings">
+              <p className="sync-note">
+                🏷️ Only syncing items tagged with 'EOS' in GoHighLevel
+              </p>
+              <ul className="sync-list">
+                <li>✓ Contacts (EOS tagged) → People</li>
+                <li>✓ Opportunities (EOS tagged) → Rocks</li>
+                <li>✓ Real-time webhook updates</li>
+              </ul>
+            </div>
           </div>
           <div className="integration-actions">
-            <button className="btn btn-primary" onClick={syncAllData} disabled={!ghlConfig.isConnected || isLoading}>
-              {isLoading ? 'Syncing...' : 'Sync Now'}
+            <button 
+              className="btn btn-primary" 
+              onClick={syncAllData} 
+              disabled={!ghlConfig.isConnected || isLoading}
+            >
+              {isLoading ? '🔄 Syncing...' : '🔄 Sync EOS Data'}
             </button>
-            <button className="btn btn-secondary" onClick={() => setShowGhlConfig(true)}>
-              Configure
+            <button className="btn btn-secondary" onClick={openGhlConfig}>
+              ⚙️ Configure
             </button>
           </div>
         </div>
@@ -1175,21 +1238,9 @@ const EOSPlatform = () => {
     </div>
   );
 
+  // FIXED: Proper GHL Config Modal - moved outside render function
   const renderGhlConfigModal = () => {
     if (!showGhlConfig) return null;
-
-    const [tempConfig, setTempConfig] = useState({ ...ghlConfig });
-    
-    const handleConfigChange = (field, value) => {
-      setTempConfig(prev => ({ ...prev, [field]: value }));
-    };
-
-    const handleSaveConfig = () => {
-      // Auto-generate webhook URL
-      const webhookUrl = `${API_BASE.replace('/api/v1', '')}/api/ghl/webhook`;
-      const finalConfig = { ...tempConfig, webhookUrl };
-      saveGhlConfig(finalConfig);
-    };
 
     return (
       <div className="modal-overlay" onClick={() => setShowGhlConfig(false)}>
@@ -1204,8 +1255,8 @@ const EOSPlatform = () => {
               <label>API Key *</label>
               <input
                 type="password"
-                value={tempConfig.apiKey || ''}
-                onChange={e => handleConfigChange('apiKey', e.target.value)}
+                value={tempGhlConfig.apiKey || ''}
+                onChange={e => handleGhlConfigChange('apiKey', e.target.value)}
                 placeholder="Your GoHighLevel API Key"
               />
               <small>Find this in your GHL account under Settings → API</small>
@@ -1215,8 +1266,8 @@ const EOSPlatform = () => {
               <label>Location ID *</label>
               <input
                 type="text"
-                value={tempConfig.locationId || ''}
-                onChange={e => handleConfigChange('locationId', e.target.value)}
+                value={tempGhlConfig.locationId || ''}
+                onChange={e => handleGhlConfigChange('locationId', e.target.value)}
                 placeholder="Your GHL Location ID"
               />
               <small>Found in your GHL URL or Location Settings</small>
@@ -1234,35 +1285,53 @@ const EOSPlatform = () => {
             </div>
 
             <div className="form-group">
+              <h4>🏷️ EOS Tag Filtering</h4>
+              <div className="eos-filter-info">
+                <p>Only contacts and opportunities tagged with 'EOS' will be synchronized.</p>
+                <div className="checkbox-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={tempGhlConfig.eosTagRequired !== false}
+                      onChange={e => handleGhlConfigChange('eosTagRequired', e.target.checked)}
+                    />
+                    Require 'EOS' tag for sync (Recommended)
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="form-group">
               <h4>Sync Settings</h4>
               <div className="checkbox-group">
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
-                    checked={tempConfig.syncContacts || false}
-                    onChange={e => handleConfigChange('syncContacts', e.target.checked)}
+                    checked={tempGhlConfig.syncContacts !== false}
+                    onChange={e => handleGhlConfigChange('syncContacts', e.target.checked)}
                   />
-                  Sync Contacts → People
+                  Sync EOS Contacts → People
                 </label>
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
-                    checked={tempConfig.syncOpportunities || false}
-                    onChange={e => handleConfigChange('syncOpportunities', e.target.checked)}
+                    checked={tempGhlConfig.syncOpportunities !== false}
+                    onChange={e => handleGhlConfigChange('syncOpportunities', e.target.checked)}
                   />
-                  Sync Opportunities → Rocks
+                  Sync EOS Opportunities → Rocks
                 </label>
               </div>
             </div>
 
             <div className="ghl-setup-guide">
-              <h4>Setup Instructions:</h4>
+              <h4>📋 Setup Instructions:</h4>
               <ol>
                 <li>Get your API key from GHL Settings → API</li>
                 <li>Find your Location ID in your GHL account</li>
                 <li>Copy the webhook URL above</li>
                 <li>Add webhook in GHL Settings → Integrations → Webhooks</li>
                 <li>Select events: Contact Created, Contact Updated, Opportunity Created, etc.</li>
+                <li><strong>Tag contacts and opportunities with 'EOS' to enable sync</strong></li>
               </ol>
             </div>
             
@@ -1273,10 +1342,10 @@ const EOSPlatform = () => {
               <button 
                 type="button" 
                 className="btn btn-primary" 
-                onClick={handleSaveConfig}
-                disabled={!tempConfig.apiKey || !tempConfig.locationId}
+                onClick={handleSaveGhlConfig}
+                disabled={!tempGhlConfig.apiKey || !tempGhlConfig.locationId}
               >
-                Save & Test Connection
+                💾 Save & Test Connection
               </button>
             </div>
           </div>
@@ -2108,6 +2177,31 @@ const EOSPlatform = () => {
           margin: 0;
         }
 
+        .sync-settings {
+          margin-top: 1rem;
+        }
+
+        .sync-note {
+          background: #e3f2fd;
+          padding: 0.75rem;
+          border-radius: 6px;
+          color: #1976d2;
+          font-size: 0.9rem;
+          margin-bottom: 1rem;
+        }
+
+        .sync-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+        }
+
+        .sync-list li {
+          padding: 0.25rem 0;
+          font-size: 0.9rem;
+          color: #4caf50;
+        }
+
         .integration-actions {
           display: flex;
           gap: 0.5rem;
@@ -2122,6 +2216,20 @@ const EOSPlatform = () => {
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
+        }
+
+        .eos-filter-info {
+          background: #f0f8ff;
+          padding: 1rem;
+          border-radius: 6px;
+          border-left: 4px solid #1976d2;
+          margin: 1rem 0;
+        }
+
+        .eos-filter-info p {
+          margin: 0 0 1rem 0;
+          color: #333;
+          font-weight: 500;
         }
 
         .ghl-setup-guide {
@@ -2144,6 +2252,11 @@ const EOSPlatform = () => {
         .ghl-setup-guide li {
           margin-bottom: 0.3rem;
           font-size: 0.9rem;
+        }
+
+        .ghl-setup-guide li:last-child {
+          font-weight: 600;
+          color: #1976d2;
         }
 
         .meetings-list {
@@ -2456,206 +2569,3 @@ const EOSPlatform = () => {
           font-size: 0.8rem;
           color: #666;
           margin-top: 0.25rem;
-        }
-
-        .checkbox-label {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          margin-bottom: 0.5rem;
-          font-size: 0.9rem;
-          cursor: pointer;
-        }
-
-        .checkbox-label input[type="checkbox"] {
-          width: auto;
-          margin: 0;
-        }
-
-        .gwc-checkboxes {
-          background: #f9f9f9;
-          padding: 1rem;
-          border-radius: 6px;
-        }
-
-        .modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0,0,0,0.5);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          z-index: 1000;
-        }
-
-        .modal {
-          background: white;
-          border-radius: 8px;
-          width: 90%;
-          max-width: 500px;
-          max-height: 90vh;
-          overflow-y: auto;
-        }
-
-        .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1.5rem;
-          border-bottom: 1px solid #e0e0e0;
-        }
-
-        .modal-header h3 {
-          margin: 0;
-        }
-
-        .modal-close {
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          cursor: pointer;
-          color: #666;
-        }
-
-        .modal-form {
-          padding: 1.5rem;
-        }
-
-        .form-group {
-          margin-bottom: 1rem;
-        }
-
-        .form-group label {
-          display: block;
-          margin-bottom: 0.5rem;
-          font-weight: 500;
-          color: #333;
-        }
-
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-          width: 100%;
-          padding: 0.75rem;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          font-size: 1rem;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus,
-        .form-group textarea:focus {
-          outline: none;
-          border-color: #1976d2;
-          box-shadow: 0 0 0 2px rgba(25,118,210,0.2);
-        }
-
-        .form-group input.error,
-        .form-group select.error {
-          border-color: #f44336;
-        }
-
-        .form-group small {
-          display: block;
-          color: #666;
-          font-size: 0.8rem;
-          margin-top: 0.25rem;
-        }
-
-        .form-group input.readonly {
-          background: #f5f5f5;
-          color: #666;
-        }
-
-        .error-text {
-          color: #f44336;
-          font-size: 0.8rem;
-          margin-top: 0.25rem;
-        }
-
-        .modal-actions {
-          display: flex;
-          gap: 1rem;
-          justify-content: flex-end;
-          margin-top: 1.5rem;
-          padding-top: 1rem;
-          border-top: 1px solid #e0e0e0;
-        }
-
-        .notifications {
-          position: fixed;
-          top: 1rem;
-          right: 1rem;
-          z-index: 1001;
-        }
-
-        .notification {
-          background: white;
-          padding: 1rem;
-          border-radius: 4px;
-          margin-bottom: 0.5rem;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-          border-left: 4px solid #1976d2;
-        }
-
-        .notification.success {
-          border-left-color: #4caf50;
-        }
-
-        .notification.error {
-          border-left-color: #f44336;
-        }
-
-        @media (max-width: 768px) {
-          .eos-nav {
-            flex-direction: column;
-            gap: 1rem;
-          }
-
-          .nav-menu {
-            justify-content: center;
-          }
-
-          .main-content {
-            padding: 1rem;
-          }
-
-          .stats-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .rocks-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .integration-cards {
-            grid-template-columns: 1fr;
-          }
-
-          .people-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .vto-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
-
-      {renderNavigation()}
-      
-      <div className="main-content">
-        {renderContent()}
-      </div>
-
-      {renderModal()}
-      {renderGhlConfigModal()}
-      {renderNotifications()}
-    </div>
-  );
-};
-
-export default EOSPlatform;
