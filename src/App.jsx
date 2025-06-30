@@ -11,7 +11,7 @@ const EOSPlatform = () => {
   const [rocks, setRocks] = useState([]);
   const [issues, setIssues] = useState([]);
   const [meetings, setMeetings] = useState([]);
-  const [teamMembers, setTeamMembers] = useState([]); // Fixed: Now properly managed
+  const [teamMembers, setTeamMembers] = useState([]);
   const [peopleData, setPeopleData] = useState([]);
   const [todos, setTodos] = useState([]);
   const [currentMeeting, setCurrentMeeting] = useState(null);
@@ -29,6 +29,9 @@ const EOSPlatform = () => {
   const [modalType, setModalType] = useState('');
   const [formData, setFormData] = useState({});
   const [errors, setErrors] = useState({});
+
+  // Notification System
+  const [notifications, setNotifications] = useState([]);
 
   // GHL Integration state
   const [ghlConfig, setGhlConfig] = useState({
@@ -1281,6 +1284,8 @@ const EOSPlatform = () => {
       </div>
     );
   };
+
+  const renderModal = () => {
     if (!showModal) return null;
 
     const handleSubmit = () => {
@@ -1915,6 +1920,12 @@ const EOSPlatform = () => {
           transform: translateY(-1px);
         }
 
+        .btn:disabled {
+          background: #ccc;
+          cursor: not-allowed;
+          transform: none;
+        }
+
         .btn-secondary {
           background: #666;
         }
@@ -1976,6 +1987,8 @@ const EOSPlatform = () => {
         .status.behind { background: #fff3e0; color: #ff9800; }
         .status.exceeded { background: #e8f5e8; color: #2e7d32; }
         .status.unknown { background: #f0f0f0; color: #666; }
+        .status.connected { background: #e8f5e8; color: #4caf50; }
+        .status.disconnected { background: #ffebee; color: #f44336; }
 
         .rocks-grid {
           display: grid;
@@ -2085,16 +2098,6 @@ const EOSPlatform = () => {
           margin: 1rem 0;
         }
 
-        .integration-status .status.connected {
-          background: #e8f5e8;
-          color: #4caf50;
-        }
-
-        .integration-status .status.disconnected {
-          background: #ffebee;
-          color: #f44336;
-        }
-
         .integration-details {
           margin: 1rem 0;
         }
@@ -2141,18 +2144,6 @@ const EOSPlatform = () => {
         .ghl-setup-guide li {
           margin-bottom: 0.3rem;
           font-size: 0.9rem;
-        }
-
-        .form-group small {
-          display: block;
-          color: #666;
-          font-size: 0.8rem;
-          margin-top: 0.25rem;
-        }
-
-        .form-group input.readonly {
-          background: #f5f5f5;
-          color: #666;
         }
 
         .meetings-list {
@@ -2565,6 +2556,18 @@ const EOSPlatform = () => {
         .form-group input.error,
         .form-group select.error {
           border-color: #f44336;
+        }
+
+        .form-group small {
+          display: block;
+          color: #666;
+          font-size: 0.8rem;
+          margin-top: 0.25rem;
+        }
+
+        .form-group input.readonly {
+          background: #f5f5f5;
+          color: #666;
         }
 
         .error-text {
