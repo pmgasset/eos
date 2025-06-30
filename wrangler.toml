@@ -1,0 +1,14 @@
+name = "eos-platform-api"
+compatibility_date = "2024-03-18"
+compatibility_flags = ["nodejs_compat"]
+
+[env.production]
+name = "eos-platform-api"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "eos-platform-db"
+database_id = "c7990444-877e-40f7-a098-0b405a14aee1"  # Replace with actual ID from Step 2
+
+[env.production.vars]
+CORS_ORIGIN = "https://eos-platform.pages.dev"  # Replace with your Pages URL
